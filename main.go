@@ -2,27 +2,22 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/muhammadfarrasfajri/login-google/bootstrap"
-	"github.com/muhammadfarrasfajri/login-google/middleware"
-	routes "github.com/muhammadfarrasfajri/login-google/routers"
+	"github.com/muhammadfarrasfajri/koperasi-gerai/bootstrap"
+	"github.com/muhammadfarrasfajri/koperasi-gerai/middleware"
+	routes "github.com/muhammadfarrasfajri/koperasi-gerai/routers"
 )
 
 func main() {
 
-	// ENV
-	bootstrap.InitEnv()
-
-	// Encryption Key
-	middleware.InitEncryptionKey()
 
 	// Database
 	bootstrap.InitDatabase()
 
 	// Firebase
-	adminAuth, userAuth := bootstrap.InitFirebase()
+	userAuth := bootstrap.InitFirebase()
 
 	// Build container (repositories, services, controllers)
-	container := bootstrap.InitContainer(adminAuth, userAuth)
+	container := bootstrap.InitContainer(userAuth)
 
 	// GIN
 	r := gin.Default()
@@ -32,13 +27,7 @@ func main() {
 	middleware.AttachCORS(r)
 
 	// ROUTES
-	routes.SetupRoutes(
-		r,
-		container.AuthAdminController,
-		container.AuthUserController,
-		container.UserController,
-		container.JWTManager,
-	)
+	routes.SetupRoutes(r, container.UserAuthController)
 
 	r.Run(":8080")
 }

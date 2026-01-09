@@ -3,31 +3,28 @@ package models
 type BaseUser struct {
 	ID        int    `json:"id"`
 	GoogleUID string `json:"google_uid"`
-
+	IDMember  string `json:"id_member"`
 	// PERHATIKAN: Ada tambahan tag form:"..." di sebelah kanan
 	Name         string `json:"name" form:"name"`
 	Email        string `json:"email"` // Email biarkan kosong form-nya, karena dari Google
-	Nik          string `json:"nik" form:"nik"`
-	Npwp         string `json:"npwp" form:"npwp"`
-	JenisKelamin string `json:"jenis_kelamin" form:"jenis_kelamin"`
-	Agama        string `json:"agama" form:"agama"`
-	TempatLahir  string `json:"tempat_lahir" form:"tempat_lahir"`
+	NIK          string `json:"nik" form:"nik"`
+	NPWP         string `json:"npwp" form:"npwp"`
+	Gender       string `json:"gender" form:"gender"`
+	Religion     string `json:"religion" form:"religion"`
+	PlaceOfBirth string `json:"placeofbirth" form:"placeofbirth"`
 
 	// Tanggal Lahir (String dulu biar aman)
-	TanggalLahir string `json:"tanggal_lahir" form:"tanggal_lahir"`
+	Birth string `json:"birth" form:"birth"`
 
-	AlamatDomisili   string `json:"alamat_domisili" form:"alamat_domisili"`
+	Address          string `json:"address" form:"address"`
 	RegisterLocation string `json:"register_location" form:"register_location"`
 	RegisterIP       string `json:"register_ip" form:"register_ip"`
-	Pekerjaan        string `json:"pekerjaan" form:"pekerjaan"`
-	StatusPerkawinan string `json:"status_perkawinan" form:"status_perkawinan"`
-	WargaNegara      string `json:"warga_negara" form:"warga_negara"`
-	NoHp             string `json:"no_hp" form:"no_hp"`
+	Job              string `json:"job" form:"job"`
+	MaritalStatus    string `json:"marital_status" form:"marital_status"`
+	Citizenship      string `json:"citizenship" form:"citizenship"`
+	PhoneNumber      string `json:"phone_number" form:"phone_number"`
 
 	GooglePicture  string `json:"google_picture"`
 	ProfilePicture string `json:"profile_picture"` // Tidak perlu form tag, diisi backend
-	KtpImagePath   string `json:"ktp_image_path"`  // Tidak perlu form tag, diisi backend
-
-	Role       string `json:"role"`
-	IsLoggedIn int    `json:"is_logged_in"`
+	KtpPicture     string `json:"ktp_image_path"`  // Tidak perlu form tag, diisi backend
 }

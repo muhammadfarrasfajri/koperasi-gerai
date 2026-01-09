@@ -1,4 +1,4 @@
-module github.com/muhammadfarrasfajri/login-google
+module github.com/muhammadfarrasfajri/koperasi-gerai
 
 go 1.24.5
 
@@ -9,8 +9,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	google.golang.org/api v0.231.0
 )
-
-require github.com/midtrans/midtrans-go v1.3.8
 
 require (
 	cel.dev/expr v0.23.1 // indirect
@@ -47,10 +45,9 @@ require (
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
-	github.com/joho/godotenv v1.5.1
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect

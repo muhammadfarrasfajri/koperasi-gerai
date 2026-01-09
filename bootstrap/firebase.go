@@ -5,21 +5,16 @@ import (
 	"log"
 
 	"firebase.google.com/go/auth"
-	"github.com/muhammadfarrasfajri/login-google/config"
+	"github.com/muhammadfarrasfajri/koperasi-gerai/config"
 )
 
-func InitFirebase() (adminAuth, userAuth *auth.Client) {
+func InitFirebase() (userAuth *auth.Client) {
 	config.InitFirebase()
-
-	adminApp, err := config.FirebaseAppAdmin.Auth(context.Background())
-	if err != nil {
-		log.Fatal("Failed to init Firebase Admin:", err)
-	}
 
 	userApp, err := config.FirebaseAppUser.Auth(context.Background())
 	if err != nil {
 		log.Fatal("Failed to init Firebase User:", err)
 	}
 
-	return adminApp, userApp
+	return userApp
 }
