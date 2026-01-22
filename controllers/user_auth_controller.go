@@ -51,7 +51,6 @@ func (c *UserAuthController) RegisterUser(ctx *gin.Context) {
         ctx.SaveUploadedFile(fileProfile, path)
         user.ProfilePicture = path
     }
-
 	//id register
 	ip := ctx.ClientIP()
 	user.RegisterIP = ip
@@ -64,4 +63,45 @@ func (c *UserAuthController) RegisterUser(ctx *gin.Context) {
     }
 
     ctx.JSON(http.StatusOK, gin.H{"message": "Register success", "user": resUser})
+}
+
+
+func (c *UserAuthController) LoginUser(ctx *gin.Context){
+    loginHistory := models.BaseLoginHistory{}
+    
+    err := ctx.BindJSON(&loginHistory)
+    if err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+    }
+
+    ip := ctx.ClientIP()
+
+    loginHistory.IPAddress = ip
+
+	result, err := c.AuthService.Login(loginHistory)
+	if err != nil {
+		ctx.JSON((http.StatusBadRequest), gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+func (c *UserAuthController) RefreshToken(ctx *gin.Context){
+   newRefreshToken := models.RefreshToken{}
+   
+   err := ctx.BindJSON(&newRefreshToken)
+   if err != nil {
+    ctx.JSON((http.StatusBadRequest), gin.H{"error": err.Error()})
+    return
+   }
+   
+   refreshToken, err := c.AuthService.RefreshToken(newRefreshToken.RefreshToken)
+   if err != nil {
+     ctx.JSON((http.StatusBadRequest), gin.H{"error": err.Error()})
+    return
+   }
+
+   ctx.JSON(http.StatusOK, refreshToken)
 }

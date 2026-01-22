@@ -30,19 +30,30 @@ func (r *UserRepo) FindByNIK(nik string) (*models.BaseUser, error) {
 	return &user, nil
 }
 
-func (r *UserRepo) IsNIKExists(nik string) (bool, error) {
-	query := `SELECT 1 FROM users WHERE nik = ? LIMIT 1`
-
-	var exists int
-	err := r.DB.QueryRow(query, nik).Scan(&exists)
-
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
+func (r *UserRepo) FindByGoogleUID(uid string) (*models.BaseUser, error) {
+	sqlQuery := `SELECT id, google_uid, name, email, is_verified FROM users WHERE google_uid = ? LIMIT 1`
+	row := r.DB.QueryRow(sqlQuery, uid)
+	user := models.BaseUser{}
+	err := row.Scan(&user.ID, &user.GoogleUID, &user.Name, &user.Email, &user.Is_verified)
 	if err != nil {
-		return false, err
+		if err == sql.ErrNoRows {
+		return nil, err
 	}
-
-	return true, nil
+	return nil, err
+}
+	return &user, err
 }
 
+func (r *UserRepo) FindById(id string) (*models.BaseUser, error) {
+	sqlQuery := `SELECT id, google_uid, name, email FROM users WHERE id = ? LIMIT 1`
+	row := r.DB.QueryRow(sqlQuery, id)
+	user := models.BaseUser{}
+	err := row.Scan(&user.ID, &user.GoogleUID, &user.Name, &user.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, err
+		}
+		return nil, err
+	}
+	return &user, nil
+}

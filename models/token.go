@@ -4,7 +4,8 @@ import "time"
 
 type RefreshToken struct {
 	ID           int
-	AdminOrUserID      int
+	UserID      int
 	RefreshToken string
+	RevokedAt  time.Time
 	ExpiresAt    time.Time
 }
