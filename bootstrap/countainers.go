@@ -11,6 +11,7 @@ import (
 
 type Container struct {
 	UserAuthController  *controllers.UserAuthController
+	JWTManager *middleware.JWTManager
 }
 
 func InitContainer(userAuth *auth.Client) *Container {
@@ -24,5 +25,6 @@ func InitContainer(userAuth *auth.Client) *Container {
 	
 	return &Container{
 		UserAuthController: controllers.NewAuthController(userAuthService),
+		JWTManager: jwtManager,
 	}
 }

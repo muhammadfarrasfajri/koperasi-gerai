@@ -21,13 +21,16 @@ func main() {
 
 	// GIN
 	r := gin.Default()
+	
 	r.Static("/public", "./public")
+
+	r.MaxMultipartMemory = 50 << 20 // 50 MB
 
 	// CORS Middleware
 	middleware.AttachCORS(r)
 
 	// ROUTES
-	routes.SetupRoutes(r, container.UserAuthController)
+	routes.SetupRoutes(r, container.UserAuthController, container.JWTManager)
 
 	r.Run(":8080")
 }

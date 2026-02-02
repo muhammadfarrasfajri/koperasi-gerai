@@ -7,5 +7,8 @@ import "github.com/muhammadfarrasfajri/koperasi-gerai/models"
 		HistoryLoginUser(user models.BaseLoginHistory) error
 		IsGoogleUIDExists(googleUID string) (bool, error)
 		IsNIKExists(nik string) (bool, error)
-		GenerateMemberID(prefix string) (string, error)
+		GetMemberId(prefix string) (string, error)
+		IsNoHPExists(noHp string) (bool, error)
+		FindByEmail(email string) (*models.BaseUser, error)
+		LinkGoogleAccount(email string, googleUID string, googlePic string) error
 	} 

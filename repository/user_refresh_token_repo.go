@@ -17,27 +17,61 @@ func NewUserRefreshTokenRepo(db *sql.DB) *UserRefreshTokenRepo{
 	}
 }
 
-func (r *UserRefreshTokenRepo) FindRefreshTokenUser(userID int) (*models.RefreshToken, error){
-	sqlQuery := `SELECT id, token_hash, expires_at FROM users WHERE user_id = ? LIMIT 1`
+func (r *UserRefreshTokenRepo) FindRefreshTokenUser(userID int) (*models.RefreshToken, error) {
+	sqlQuery := `
+		SELECT id, token_hash, expires_at
+		FROM user_refresh_tokens
+		WHERE user_id = ?
+		LIMIT 1
+	`
+
 	row := r.DB.QueryRow(sqlQuery, userID)
-	user := models.RefreshToken{}
-	err := row.Scan(&user.ID, &user.RefreshToken, &user.ExpiresAt)
+
+	token := models.RefreshToken{}
+	err := row.Scan(&token.ID, &token.TokenHash, &token.ExpiresAt)
 	if err == sql.ErrNoRows {
 		return nil, errors.New("refresh token not found")
 	}
-	return &user, err
+	if err != nil {
+		return nil, err
+	}
+
+	return &token, nil
 }
 
-func (r *UserRefreshTokenRepo) CreateRefreshTokenUser(refreshToken models.RefreshToken) error{
-	sqlQuery := `INSERT INTO user_refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE token_hash = VALUES(token_hash), expires_at = VALUES(expires_at)`
-	formatted := refreshToken.ExpiresAt.Format("2006-01-02 15:04:05")
-	_, err := r.DB.Exec(sqlQuery, refreshToken.UserID, refreshToken.RefreshToken, formatted)
+func (r *UserRefreshTokenRepo) UpsertRefreshToken(rt models.RefreshToken) error {
+	sqlQuery := `
+	INSERT INTO user_refresh_tokens (user_id, token_hash, expires_at) 
+	VALUES (?, ?, ?) 
+	ON DUPLICATE KEY UPDATE
+		token_hash = VALUES(token_hash),
+		expires_at = VALUES(expires_at),
+		revoked_at = NULL
+	`
+
+	_, err := r.DB.Exec(
+		sqlQuery,
+		rt.UserID,
+		rt.TokenHash,
+		rt.ExpiresAt,
+	)
 	return err
 }
 
-func (r *UserRefreshTokenRepo) UpdateRefreshTokenUser(refreshToken models.RefreshToken) error{
-	sqlQuery := `UPDATE user_refresh_tokens SET token_hash = ?, expires_at = ? WHERE user_id = ?`
-	formatted := refreshToken.ExpiresAt.Format("2006-01-02 15:04:05")
-	_, err := r.DB.Exec(sqlQuery, refreshToken.RefreshToken, formatted, refreshToken.UserID)
-	return err
+func (r *UserRefreshTokenRepo) DeleteRefreshToken(tokenHash string) error {
+    // Perhatikan: parameternya adalah tokenHash (yang sudah di-hash di Service)
+    query := "DELETE FROM user_refresh_tokens WHERE token_hash = ?"
+    
+    result, err := r.DB.Exec(query, tokenHash)
+    if err != nil {
+        return err
+    }
+
+    // (Opsional) Cek apakah ada baris yang terhapus?
+    rowsAffected, _ := result.RowsAffected()
+    if rowsAffected == 0 {
+        return errors.New("token tidak ditemukan (mungkin sudah logout duluan)")
+    }
+
+    return nil
 }

@@ -3,14 +3,13 @@ package models
 import "time"
 
 type BaseLoginHistory struct {
-	ID       	int	`json:"id"`
-	IdToken		string `json:"id_token"`
-	UserID  	string	`json:"user_id"`
-	LoginAt     time.Time  `json:"login_at"`
-	LogoutAt    *time.Time `json:"logout_at"` // Pointer karena bisa NULL
-	Status      string     `json:"status"`
-	IPAddress   string     `json:"ip_address"`
-	UserAgent   string     `json:"user_agent"`
-	DeviceInfo  string     `json:"device_info"` // Diisi hasil parsing UserAgent
-	Location    string     `json:"location"`  // Opsional, hasil lookup IP
+	ID       	int		`json:"id"` // auto increment
+	UserID  	int		`json:"user_id"` // from id user
+	LoginAt     time.Time `json:"login_at"`
+	Status      string  `json:"status"` // from code
+	IPAddress   string  `json:"ip_address"` // from code
+	UserAgent   string  `json:"user_agent"`// from code
+	DeviceInfo  string  `json:"device_info"` // from code
+	Location    string  `json:"location"`  // from front end
+	ErrorMessage string `json:"error_message"`
 }

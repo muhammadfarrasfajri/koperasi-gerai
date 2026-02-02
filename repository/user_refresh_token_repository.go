@@ -6,6 +6,6 @@ import (
 
 type UserRefreshTokenRepository interface {
 	FindRefreshTokenUser(userID int) (*models.RefreshToken, error)
-	CreateRefreshTokenUser(historyLogin models.RefreshToken) error
-	UpdateRefreshTokenUser(historyLogin models.RefreshToken) error
+	UpsertRefreshToken(refreshToken models.RefreshToken) error
+	DeleteRefreshToken(token string) error
 }
