@@ -26,7 +26,7 @@ func (j *JWTManager) GenerateAccessToken(userID int, email string) (string, erro
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"email":   email,
-		"exp":     time.Now().Add(5 * time.Minute).Unix(),
+		"exp":     time.Now().Add(30 * time.Minute).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -71,8 +71,7 @@ func (j *JWTManager) AuthMiddleware() gin.HandlerFunc {
 		c.Set("user_id", int(claims["user_id"].(float64)))
 		c.Set("email", claims["email"].(string))
 		c.Set("role", claims["role"])
-		// fmt.Println("Tokennya:", int(claims["user_id"].(float64)))
-
+		
 		c.Next()
 	}
 }

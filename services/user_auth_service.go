@@ -15,6 +15,7 @@ import (
 	"github.com/muhammadfarrasfajri/koperasi-gerai/middleware"
 	"github.com/muhammadfarrasfajri/koperasi-gerai/models"
 	"github.com/muhammadfarrasfajri/koperasi-gerai/repository"
+	"github.com/muhammadfarrasfajri/koperasi-gerai/utils"
 )
 
 var (
@@ -27,6 +28,19 @@ var (
 	ErrExistingPhoneNo = errors.New("Phone number already usage")
     ErrGenMemberId = errors.New("Generate member id failed")
     ErrInvalidPoscode = errors.New("Invalid pos code")
+    ErrRegisterFailed = errors.New("Register Failed")
+    ErrInvalidUser = errors.New("invalid user data")
+    ErrUserNotVerified = errors.New("User is not verified")
+    ErrAccessToken = errors.New("Failed generate JWT access")
+    ErrRefreshToken = errors.New("Failed generate JWT refresh")
+    ErrloginSession= errors.New("Failed to save login session")
+    ErrParseToken = errors.New("unexpected signing method")
+    ErrInvalidRefreshToken = errors.New("refresh token invalid or expired")
+    ErrRefreshTokenNotFound = errors.New("Refresh token not found in db")
+    ErrRefreshTokenNotMatch = errors.New("refresh token reuse detected / not match")
+    ErrUserNotFound = errors.New("User not found")
+    ErrSaveNewSession = errors.New("failed to save new session")
+    ErrLogout = errors.New("Logout Failed / token not found")
 )
 
 type UserAuthService struct {
@@ -74,7 +88,13 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
     }
 
     if len(user.PosCode) != 5 {
+        logError(ErrInvalidPoscode, "Pos code validation")
         return nil, ErrInvalidPoscode
+    }
+
+    isValid, message := utils.ValidateNPWP(user.NPWP)
+    if isValid == false || message != "" {
+        return nil, errors.New(message)
     }
 
     // 2. Verifikasi Token Firebase
@@ -104,13 +124,11 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
     existingUser, err := s.AuthRepo.FindByEmail(user.Email)
 
     if err == nil && existingUser != nil {
-
         if existingUser.GoogleUID == "" || existingUser.GoogleUID != user.GoogleUID {
             errLink := s.AuthRepo.LinkGoogleAccount(user.Email, user.GoogleUID, user.GooglePicture)
             if errLink != nil {
                 return nil, fmt.Errorf("gagal menghubungkan akun: %v", errLink)
             }
-
             user.IDMember = existingUser.IDMember
         }
         return &user, nil
@@ -136,6 +154,7 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
    
     lastID, err := s.AuthRepo.GetMemberId(prefix)
     if err != nil {
+        logError(err, "Get last id member id")
         return nil, err 
     }
     
@@ -152,32 +171,73 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
     user.IDMember = fmt.Sprintf("%s-%010d", prefix, newNumber)
 
     err = s.AuthRepo.CreateRegisterUser(user)
-    if err != nil {
 
-        return nil, err
+    if err != nil {
+        logError(ErrRegisterFailed, "Create User register")
+        return nil, ErrRegisterFailed
     }
+
+    fmt.Println("Register Success")
+    prettyJSON, _ := json.MarshalIndent(user, "", "  ")
+    fmt.Println("Data user : ", string(prettyJSON))
 
     return &user, nil
 }
 
 func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHistory) (map[string]interface{}, error) {
+
     ctx := context.Background()
+    
+    var savedUser *models.BaseUser 
+    finalStatus := "FAILED"
+
+    defer func() {
+        if savedUser != nil {
+            log.Printf("[DEFER CHECK] User ID: %d | Status: %s\n", savedUser.ID, finalStatus)
+            
+            // Masukkan data ke history
+            loginHistory.UserID = savedUser.ID
+            loginHistory.Status = finalStatus
+            
+            if loginHistory.LoginAt.IsZero() {
+                loginHistory.LoginAt = time.Now().UTC()
+            }
+
+            // Simpan ke DB
+            if errHist := s.AuthRepo.HistoryLoginUser(loginHistory); errHist != nil {
+                log.Printf("[ERROR DB] Gagal simpan history: %v\n", errHist)
+            } else {
+                log.Println("[SUCCESS DB] History login berhasil disimpan.")
+            }
+
+        } else {
+            // Jika masuk sini saat Login Sukses, berarti ada bug parah di logic assignment
+            log.Println("[DEFER SKIP] History tidak disimpan karena savedUser masih NIL.")
+        }
+    }()
+
+    logError := func(err error, context string) {
+
+        prettyJSON, _ := json.MarshalIndent(loginHistory, "", "  ")
+       
+        shortToken := ""
+        if len(idToken) > 10 { shortToken = idToken[:10] + "..." }
+
+        log.Printf("[ERROR] %s | Token: %s | Err: %v\n", 
+        context, shortToken, err)
+        fmt.Printf("\n[DEBUG DATA LOGIN]:\n%s\n\n", string(prettyJSON))
+    }
 
     // 1. Verifikasi Firebase Token
     token, err := s.FirebaseAuth.VerifyIDToken(ctx, idToken)
     if err != nil {
-        login, _ := json.Marshal(loginHistory)
-        log.Println("Id token = ", idToken)
-        log.Println("Data User = ", string(login))
+        logError(ErrInvalidToken, "verifikasi firebase")
         return nil, ErrInvalidToken
     }
 
     // 2. Cari User via Google UID
     user, err := s.UserRepo.FindByGoogleUID(token.UID)
-    
-    // ------------------------------------------------------------------
-    // LOGIC ACCOUNT LINKING
-    // ------------------------------------------------------------------
+
     if err != nil { 
 
         email, _ := token.Claims["email"].(string)
@@ -190,45 +250,44 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
             
             user, err = s.UserRepo.FindByGoogleUID(token.UID)
             if err != nil {
+                logError(errors.New("gagal mengambil data user setelah linking"), "Find By Google UID")
                 return nil, errors.New("gagal mengambil data user setelah linking")
             }
         } else {
+            logError(errors.New("User not found. Please Register first."), "User not found")
             return nil, errors.New("User not found. Please Register first.")
         }
     }
 
+    savedUser = user
+
     if user == nil {
-        return nil, errors.New("user data is invalid")
+        logError(ErrInvalidUser, "invalid user")
+        return nil, ErrInvalidUser
     }
-    finalStatus := "FAILED" 
 
-    defer func() {
-        loginHistory.UserID = user.ID
-        loginHistory.Status = finalStatus
-
-        if errHist := s.AuthRepo.HistoryLoginUser(loginHistory); errHist != nil {
-            log.Println("Gagal simpan history:", errHist)
-        }
-    }()
+    finalStatus = "FAILED" 
 
     // 3. Cek Status Verifikasi
     if user.Is_verified == 0 {
         // Otomatis defer jalan -> Status FAILED
-        return nil, errors.New("User is not verified")
+        loginHistory.ErrorMessage = "User is not verified"
+        logError(ErrUserNotVerified, "Checking status verifikasi")
+        return nil, ErrUserNotVerified
     }
-
-    // [DIHAPUS] HistoryLoginUser manual disini sudah dihapus agar tidak double
 
     // 4. Generate Access Token
     accessToken, err := s.JWTSecret.GenerateAccessToken(user.ID, user.Email)
     if err != nil {
-        return nil, errors.New("error JWT access")
+        logError(ErrAccessToken, "Generate access token")
+        return nil, ErrAccessToken
     }
 
     // 5. Generate Refresh Token
     refreshToken, err := s.JWTSecret.GenerateRefreshToken(user.ID)
     if err != nil {
-        return nil, errors.New("error JWT refresh")
+         logError(ErrRefreshToken, "Generate refresh token")
+        return nil, ErrRefreshToken
     }
 
     // 6. Hash & Siapkan Model
@@ -244,16 +303,26 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
     // 7. Simpan ke Database (Upsert)
     err = s.RefRepo.UpsertRefreshToken(tokenModel)
     if err != nil {
-        return nil, errors.New("gagal menyimpan session login")
+        logError(ErrloginSession, "upsert history login")
+        return nil, ErrloginSession
     }
 
-    // 8. Sukses!
+    loginHistory.LoginAt = time.Now().UTC()
+
     finalStatus = "SUCCESS"
+    loginHistory.Status = finalStatus
+    loginHistory.UserID = user.ID   
+    loginHistory.Status = finalStatus
+
+    //LOG User
+    prettyHitory, _ := json.MarshalIndent(loginHistory, "", "  ")
+    prettyToken, _ := json.MarshalIndent(tokenModel, "", " ")
+    fmt.Println(string(prettyToken))
+    fmt.Println(string(prettyHitory))
 
     return map[string]interface{}{
-        "message":       "login success",
         "access_token":  accessToken,
-        "refresh_token": refreshToken,
+        "token_hash": refreshToken,
         "user": map[string]interface{}{
             "id":    user.ID,
             "name":  user.Name,
@@ -264,100 +333,119 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
 }
 
 func (s *UserAuthService) RefreshToken(rawRefreshToken string) (map[string]interface{}, error) {
-    
+
+     logError := func(err error, context string) {
+        log.Printf("[ERROR] %s | RefreshToken: %s | Err: %v\n", 
+        context, rawRefreshToken, err)
+    }
+
     // 1. Parse Token dengan Safety Check
     token, err := jwt.Parse(rawRefreshToken, func(t *jwt.Token) (interface{}, error) {
         // Best Practice: Cek Signing Method
         if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, fmt.Errorf("unexpected signing method")
+            logError(ErrParseToken, "parse Token")
+            return nil, ErrParseToken
         }
         return s.JWTSecret.RefreshSecret, nil
     })
 
-    // PERBAIKAN 3: Cek Error DULU sebelum lanjut
     if err != nil {
-        return nil, errors.New("refresh token invalid or expired")
+        logError(ErrInvalidRefreshToken, "Checking refresh token")
+        return nil, ErrInvalidRefreshToken
     }
     
     // Ambil Claims
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok || !token.Valid {
+        logError(errors.New("Invalid token claims"), "get claims")
         return nil, errors.New("invalid token claims")
     }
 
     // Ambil User ID
     userIDFloat, ok := claims["user_id"].(float64)
     if !ok {
+        logError(errors.New("Invalid user id in token"), "get user id")
         return nil, errors.New("invalid user id in token")
     }
+
     userID := int(userIDFloat)
 
     // 2. Cek Token di Database
     tokenCheck, err := s.RefRepo.FindRefreshTokenUser(userID)
     if err != nil || tokenCheck == nil {
-        return nil, errors.New("refresh token not found in db")
+        logError(ErrRefreshTokenNotFound, "Checking refresh token in database")
+        return nil, ErrInvalidRefreshToken
     }
 
     // PERBAIKAN 1: Hash dulu token dari user, baru bandingkan
     incomingTokenHash := middleware.HashToken(rawRefreshToken)
     
     if incomingTokenHash != tokenCheck.TokenHash {
-        // Ini indikasi Token Reuse Attack (Bahaya!)
-        // Opsional: Kamu bisa hapus token di DB biar user dipaksa login ulang demi keamanan
-        return nil, errors.New("refresh token reuse detected / not match")
+        logError(ErrRefreshTokenNotMatch, "compare refresh token")
+        return nil,ErrRefreshTokenNotMatch
     }
 
     // 3. Ambil User untuk Data Token Baru
     user, err := s.UserRepo.FindById(strconv.Itoa(userID))
     if err != nil || user == nil {
-        return nil, errors.New("user not found")
+        logError(ErrUserNotFound, "get user with id")
+        return nil, ErrUserNotFound
     }
 
     // 4. Generate Token Baru
     newAccessToken, err := s.JWTSecret.GenerateAccessToken(user.ID, user.Email)
     if err != nil {
+        logError(ErrAccessToken, "Generate access token")
         return nil, err
     }
 
     newRefreshToken, err := s.JWTSecret.GenerateRefreshToken(user.ID)
     if err != nil {
+        logError(ErrRefreshToken, "Generate refresh token")
         return nil, err
     }
 
     // 5. Simpan Token Baru ke Database
     newRefreshTokenHash := middleware.HashToken(newRefreshToken)
+
     expiresAt := time.Now().Add(7 * 24 * time.Hour)
 
     tokenModel := models.RefreshToken{
-        UserID:    user.ID,        // PERBAIKAN 2: Jangan lupa isi UserID!
+        UserID:    user.ID,    
         TokenHash: newRefreshTokenHash,
         ExpiresAt: expiresAt,
     }
 
     err = s.RefRepo.UpsertRefreshToken(tokenModel)
     if err != nil {
-        return nil, errors.New("failed to save new session")
+        logError(ErrSaveNewSession, "Update refresh token")
+        return nil, ErrSaveNewSession
     }
+
+    prettyToken, _ := json.MarshalIndent(tokenModel, "", " ")
+    fmt.Println(string(prettyToken))
 
     return map[string]interface{}{
         "access_token":  newAccessToken,
-        "refresh_token": newRefreshToken,
+        "token_hash": newRefreshToken,
     }, nil
 }
 
 func (s *UserAuthService) Logout(rawRefreshToken string) error {
     
-    // 1. LAKUKAN HASHING ULANG DISINI
-    // Gunakan fungsi yang SAMA PERSIS dengan yang kamu pakai di fungsi Login
+    logError := func(err error, context string) {
+
+        log.Printf("[ERROR] %s | Token: %s | Err: %v\n", 
+        context, rawRefreshToken, err)
+    }
     tokenHash := middleware.HashToken(rawRefreshToken)
 
-    // 2. Sekarang 'tokenHash' isinya sudah cocok dengan yang di Database
-    // Panggil Repo untuk hapus berdasarkan hash tersebut
     err := s.RefRepo.DeleteRefreshToken(tokenHash)
-    
+
     if err != nil {
-        return errors.New("gagal logout / token tidak ditemukan")
+        logError(ErrLogout, "Delete Refresh Token")
+        return ErrLogout
     }
-    
+
     return nil
 }
