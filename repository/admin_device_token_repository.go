@@ -20,7 +20,7 @@ func NewAdminDeviceTokenRepository(db *sql.DB) AdminDeviceTokenRepository {
 func (r *adminDeviceTokenRepo) GetAllTokens(ctx context.Context) ([]string, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT fcm_token
-		FROM admin_device_tokens
+		FROM admins
 	`)
 	if err != nil {
 		return nil, err
