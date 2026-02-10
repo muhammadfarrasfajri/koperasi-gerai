@@ -83,7 +83,7 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (err er
     }
     // checking NIK
     if len(user.NIK) != 16 {
-        logError(ErrExistingNIK, "NIK validation")
+        logError(ErrInvalidNIK, "NIK validation")
         return  ErrInvalidNIK
     }
     //checking pos code
@@ -177,7 +177,7 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (err er
         logError(ErrRegisterFailed, "Create User register")
         return ErrRegisterFailed
     }
-
+    
     fmt.Println("Register Success")
     prettyJSON, _ := json.MarshalIndent(user, "", "  ")
     fmt.Println("Data user : ", string(prettyJSON))
