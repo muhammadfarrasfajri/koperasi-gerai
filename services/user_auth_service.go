@@ -340,7 +340,6 @@ func (s *UserAuthService) RefreshToken(rawRefreshToken string) (map[string]inter
         }
         return s.JWTSecret.RefreshSecret, nil
     })
-
     if err != nil {
         logError(ErrInvalidRefreshToken, "Checking refresh token")
         return nil, ErrInvalidRefreshToken
