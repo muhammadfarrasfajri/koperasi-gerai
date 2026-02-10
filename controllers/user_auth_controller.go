@@ -88,12 +88,12 @@ func (c *UserAuthController) RegisterUser(ctx *gin.Context) {
     // IP Address
     user.RegisterIP = ctx.ClientIP()
     
-    resUser, err := c.AuthService.Register(idToken, user)
+    err = c.AuthService.Register(idToken, user)
     
     if err != nil {
         ctx.JSON(http.StatusBadRequest, models.APIResponse{
             Error: true,
-            Message: "Register Failed",
+            Message: err.Error(),
             Type: "Register User",
         })
         return
@@ -102,7 +102,6 @@ func (c *UserAuthController) RegisterUser(ctx *gin.Context) {
     ctx.JSON(http.StatusOK, models.APIResponse{
         Error: false,
         Message: "Register Success",
-        Data: resUser,
     })
 }
 

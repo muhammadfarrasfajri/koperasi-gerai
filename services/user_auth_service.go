@@ -63,7 +63,7 @@ func NewUserAuthService(userAuthRepository repository.AuthRepository, userReposi
 
 // --------------------------- REGISTER -----------------------------------
 
-func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *models.BaseUser, err error) {
+func (s *UserAuthService) Register(idToken string, user models.BaseUser) (err error) {
     ctx := context.Background()
 
     logError := func(err error, context string) {
@@ -76,35 +76,36 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
         context, shortToken, err)
         fmt.Printf("\n[DEBUG DATA USER]:\n%s\n\n", string(prettyJSON))
     }
-    
+    // checking cell phone numbers
     if len(user.PhoneNumber) < 11 || len(user.PhoneNumber) > 15 {
         logError(ErrInvalidNoHp, "Phone number validation")
-        return nil, ErrInvalidNoHp
+        return  ErrInvalidNoHp
     }
-
+    // checking NIK
     if len(user.NIK) != 16 {
         logError(ErrExistingNIK, "NIK validation")
-        return nil, ErrInvalidNIK
+        return  ErrInvalidNIK
     }
-
+    //checking pos code
     if len(user.PosCode) != 5 {
         logError(ErrInvalidPoscode, "Pos code validation")
-        return nil, ErrInvalidPoscode
+        return  ErrInvalidPoscode
     }
-
+    //checking NPWP
     isValid, message := utils.ValidateNPWP(user.NPWP)
     if isValid == false || message != "" {
-        return nil, errors.New(message)
+        logError(errors.New(message), "NPWP validation")
+        return  errors.New(message)
     }
 
-    // 2. Verifikasi Token Firebase
+    // Verification Token Firebase
     token, err := s.FirebaseAuth.VerifyIDToken(ctx, idToken)
     if err != nil {
         logError(ErrInvalidToken, "Firebase token verification")
-        return nil, ErrInvalidToken
+        return  ErrInvalidToken
     }
 
-    // Ambil data dari token
+    // Get data from uid Google
     user.GoogleUID = token.UID
 
     if email, ok := token.Claims["email"].(string); ok {
@@ -120,32 +121,32 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
             user.Name = n
         }
     }
-    
+
+    // Get user by email
     existingUser, err := s.AuthRepo.FindByEmail(user.Email)
 
     if err == nil && existingUser != nil {
         if existingUser.GoogleUID == "" || existingUser.GoogleUID != user.GoogleUID {
             errLink := s.AuthRepo.LinkGoogleAccount(user.Email, user.GoogleUID, user.GooglePicture)
             if errLink != nil {
-                return nil, fmt.Errorf("gagal menghubungkan akun: %v", errLink)
+                return  fmt.Errorf("gagal menghubungkan akun: %v", errLink)
             }
             user.IDMember = existingUser.IDMember
         }
-        return &user, nil
+        return nil
     }
-    
-    // Cek NIK
+    // checking NIk availability
     nikExists, _ := s.AuthRepo.IsNIKExists(user.NIK)
     if nikExists {
         logError(ErrExistingNIK, "Checking exists NIK")
-        return nil, ErrExistingNIK
+        return ErrExistingNIK
     }
 
-    // Cek No HP
+    // checking phone number availability
     hpExists, _ := s.AuthRepo.IsNoHPExists(user.PhoneNumber)
     if hpExists {
         logError(ErrExistingPhoneNo, "Checking exists phone number")
-        return nil, ErrExistingPhoneNo
+        return ErrExistingPhoneNo
     }
 
     currentYear := time.Now().Format("06")
@@ -155,7 +156,7 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
     lastID, err := s.AuthRepo.GetMemberId(prefix)
     if err != nil {
         logError(err, "Get last id member id")
-        return nil, err 
+        return err 
     }
     
     newNumber := 1
@@ -168,20 +169,20 @@ func (s *UserAuthService) Register(idToken string, user models.BaseUser) (res *m
             }
         }
     }
+
     user.IDMember = fmt.Sprintf("%s-%010d", prefix, newNumber)
 
     err = s.AuthRepo.CreateRegisterUser(user)
-
     if err != nil {
         logError(ErrRegisterFailed, "Create User register")
-        return nil, ErrRegisterFailed
+        return ErrRegisterFailed
     }
 
     fmt.Println("Register Success")
     prettyJSON, _ := json.MarshalIndent(user, "", "  ")
     fmt.Println("Data user : ", string(prettyJSON))
 
-    return &user, nil
+    return nil
 }
 
 func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHistory) (map[string]interface{}, error) {
@@ -190,6 +191,7 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
     
     var savedUser *models.BaseUser 
     finalStatus := "FAILED"
+    emailInfo := ""
 
     defer func() {
         if savedUser != nil {
@@ -198,20 +200,16 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
             // Masukkan data ke history
             loginHistory.UserID = savedUser.ID
             loginHistory.Status = finalStatus
-            
+
             if loginHistory.LoginAt.IsZero() {
                 loginHistory.LoginAt = time.Now().UTC()
             }
-
-            // Simpan ke DB
             if errHist := s.AuthRepo.HistoryLoginUser(loginHistory); errHist != nil {
                 log.Printf("[ERROR DB] Gagal simpan history: %v\n", errHist)
             } else {
                 log.Println("[SUCCESS DB] History login berhasil disimpan.")
             }
-
         } else {
-            // Jika masuk sini saat Login Sukses, berarti ada bug parah di logic assignment
             log.Println("[DEFER SKIP] History tidak disimpan karena savedUser masih NIL.")
         }
     }()
@@ -219,46 +217,42 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
     logError := func(err error, context string) {
 
         prettyJSON, _ := json.MarshalIndent(loginHistory, "", "  ")
-       
+        emailFinal := emailInfo
         shortToken := ""
         if len(idToken) > 10 { shortToken = idToken[:10] + "..." }
 
         log.Printf("[ERROR] %s | Token: %s | Err: %v\n", 
         context, shortToken, err)
+        log.Println(emailFinal)
         fmt.Printf("\n[DEBUG DATA LOGIN]:\n%s\n\n", string(prettyJSON))
     }
 
-    // 1. Verifikasi Firebase Token
     token, err := s.FirebaseAuth.VerifyIDToken(ctx, idToken)
     if err != nil {
         logError(ErrInvalidToken, "verifikasi firebase")
         return nil, ErrInvalidToken
     }
 
-    // 2. Cari User via Google UID
     user, err := s.UserRepo.FindByGoogleUID(token.UID)
-
     if err != nil { 
-
         email, _ := token.Claims["email"].(string)
         existingUser, errEmail := s.AuthRepo.FindByEmail(email)
-
         if errEmail == nil && existingUser != nil {
-
             pic, _ := token.Claims["picture"].(string)
             _ = s.AuthRepo.LinkGoogleAccount(email, token.UID, pic)
-            
             user, err = s.UserRepo.FindByGoogleUID(token.UID)
             if err != nil {
+                emailInfo = email
                 logError(errors.New("gagal mengambil data user setelah linking"), "Find By Google UID")
                 return nil, errors.New("gagal mengambil data user setelah linking")
             }
         } else {
+            emailInfo = email
             logError(errors.New("User not found. Please Register first."), "User not found")
             return nil, errors.New("User not found. Please Register first.")
         }
     }
-
+    emailInfo = user.Email
     savedUser = user
 
     if user == nil {
@@ -270,7 +264,6 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
 
     // 3. Cek Status Verifikasi
     if user.Is_verified == 0 {
-        // Otomatis defer jalan -> Status FAILED
         loginHistory.ErrorMessage = "User is not verified"
         logError(ErrUserNotVerified, "Checking status verifikasi")
         return nil, ErrUserNotVerified
@@ -319,6 +312,7 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
     prettyToken, _ := json.MarshalIndent(tokenModel, "", " ")
     fmt.Println(string(prettyToken))
     fmt.Println(string(prettyHitory))
+    log.Println(emailInfo)
 
     return map[string]interface{}{
         "access_token":  accessToken,
@@ -339,9 +333,7 @@ func (s *UserAuthService) RefreshToken(rawRefreshToken string) (map[string]inter
         context, rawRefreshToken, err)
     }
 
-    // 1. Parse Token dengan Safety Check
     token, err := jwt.Parse(rawRefreshToken, func(t *jwt.Token) (interface{}, error) {
-        // Best Practice: Cek Signing Method
         if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
             logError(ErrParseToken, "parse Token")
             return nil, ErrParseToken
@@ -354,14 +346,12 @@ func (s *UserAuthService) RefreshToken(rawRefreshToken string) (map[string]inter
         return nil, ErrInvalidRefreshToken
     }
     
-    // Ambil Claims
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok || !token.Valid {
         logError(errors.New("Invalid token claims"), "get claims")
         return nil, errors.New("invalid token claims")
     }
 
-    // Ambil User ID
     userIDFloat, ok := claims["user_id"].(float64)
     if !ok {
         logError(errors.New("Invalid user id in token"), "get user id")
