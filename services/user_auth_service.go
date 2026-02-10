@@ -197,7 +197,6 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
         if savedUser != nil {
             log.Printf("[DEFER CHECK] User ID: %d | Status: %s\n", savedUser.ID, finalStatus)
             
-            // Masukkan data ke history
             loginHistory.UserID = savedUser.ID
             loginHistory.Status = finalStatus
 
@@ -252,6 +251,7 @@ func (s *UserAuthService) Login(idToken string, loginHistory models.BaseLoginHis
             return nil, errors.New("User not found. Please Register first.")
         }
     }
+
     emailInfo = user.Email
     savedUser = user
 
