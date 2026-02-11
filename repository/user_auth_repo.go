@@ -123,11 +123,7 @@ func (r *UserAuthRepo) HistoryLoginUser(user models.BaseLoginHistory) error {
     } else {
         fmt.Printf(">>> SUKSES INSERT: %d baris berhasil masuk ke tabel.\n", rows)
     }
-
-    // 4. CEK TRANSAKSI (GORM / SQLX)
-    // Jika r.DB adalah *sql.Tx, kita harus memastikan dia di-commit di level service/handler
-    // Jika r.DB adalah *sql.DB (koneksi biasa), ini otomatis commit.
-    
+        
     fmt.Println("--- [REPO DEBUG END] ---")
     return nil
 }

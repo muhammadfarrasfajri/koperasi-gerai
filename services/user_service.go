@@ -11,5 +11,3 @@ func NewUserService(userRepository repository.UserRepository) *UserService{
 		UserRepo: userRepository,
 	}
 }
-
-
